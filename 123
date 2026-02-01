@@ -1,0 +1,23 @@
+#!/bin/bash
+
+read -p "Clone count: " n
+read -p "Start ID: " i
+read -p "Number vmbr: " v
+read -p "Template ID: " t
+
+b="vmbr$v"
+
+if ! ip link show $b > /dev/null 2>&1; then
+  echo "auto $b
+iface $b inet manual
+  bridge-ports none
+  bridge-stp off
+  bridge-fd 0" >> /etc/network/interfaces
+  ifup $b
+fi
+
+for((c=0;c<n;c++)); do
+  vm=$((i+c))
+  qm clone $t $vm --name "vm$vm"
+  qm set $vm --net1 virtio,bridge=$b
+done
