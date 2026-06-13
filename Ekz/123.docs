@@ -1,0 +1,157 @@
+Спидран по сетевому взаимодействию.
+ISP:
+hostnamectl hostname ISP
+bash
+cd /etc/net/ifaces
+mkdir <имя интерфейса в интернет>
+mkdir <имя интерфейса в сеть>
+echo TYPE=eth > eth0/options		← Интерфейс в интернет
+echo BOOTPROTO=dhcp >> eth0/options
+echo TYPE=eth > eth1/options		← Интерфейс в сеть
+echo BOOTPROTO=static >> eth1/options
+echo 10.0.128.1/24 > eth1/ipv4address
+systemctl restart network
+apt-get update -y
+apt-get install -y iptables
+systemctl enable –now iptables
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+iptables-save > /etc/sysconfig/iptables
+echo net.ipv4.ip_forward = 1 > /etc/net/sysctl.conf
+sysctl -p
+Готово.
+
+
+
+Спидран по DHCP.
+ISP:
+apt-get install -y dhcp-server
+systemctl enable –now dhcpd
+echo DHCPARGS=”eth1” > /etc/sysconfig/dhcpd
+Содержимое /etc/dhcp/dhcpd.conf должно быть следующим:
+subnet 10.0.128.0 netmask 255.255.255.0 {
+    range 10.0.128.50 10.0.128.100;
+    option routers 10.0.128.1;
+    option domain-name-servers 10.0.128.2, 8.8.8.8;
+    option domain-search "ilove.sa";	← Это для samba-dc в будущем
+}
+
+host Server {
+    hardware ethernet 00:15:5d:47:01:0d;	← Узнаем MAC-адрес через ip a
+    fixed-address 10.0.128.2;
+}
+Перезагружаем
+systemctl restart dhcpd
+Готово.
+
+
+
+Спидран по samba-dc (внезапно).
+Server:
+hostnamectl hostname Server.ilove.sa
+bash
+cd /etc/net/ifaces
+mkdir <имя интерфейса>
+echo TYPE=eth > eth0/options
+echo BOOTPROTO=dhcp >> eth0/options
+systemctl restart network
+apt-get update -y
+apt-get install -y task-samba-dc kr5-workstation
+systemctl stop smb nmb winbind
+systemctl disable smb nmb winbind
+rm -f /etc/samba/smb.conf
+rm -rf /var/lib/samba/*
+rm -rf /var/cache/samba/*
+samba-tool domain provision	← Следуем скрину и вводим пароль P@ssw0rd
+cp /var/lib/samba/private/krb5.conf /etc/krb5.conf
+systemctl enable --now samba
+samba-tool user create ssa1 ”P@ssw0rd”
+samba-tool user create ssa2 ”P@ssw0rd”
+samba-tool user create ssa3 ”P@ssw0rd”
+samba-tool user enable ssa1
+samba-tool user enable ssa2
+samba-tool user enable ssa3
+samba-tool group create "ssa_group"
+samba-tool group addmembers "ssa_group" ssa1,ssa2,ssa3
+
+cli:
+hostnamectl hostname cli
+bash
+cd /etc/net/ifaces
+mkdir <имя интерфейса>
+echo TYPE=eth > eth0/options
+echo BOOTPROTO=dhcp >> eth0/options
+systemctl restart network
+apt-get update -y
+apt-get install -y task-auth-ad-sssd realmd krb5-workstation samba-client
+Запускаем ”System management center” через графическую оболочку:
+Обязательно перезагружаемся
+reboot	
+echo P@ssw0rd | kinit ssa1@ILOVE.SA
+echo P@ssw0rd | kinit ssa2@ILOVE.SA
+echo P@ssw0rd | kinit ssa3@ILOVE.SA
+echo P@ssw0rd | kinit administrator@ILOVE.SA
+Входим под каждым пользователем вручную для создания профилей.
+Готово.
+
+
+Моя любимая часть (SSH).
+Server:
+useradd -m -s /bin/bash sshuser
+usermod -aG wheel sshuser
+passwd sshuser	← Здесь я снова использую пароль P@ssw0rd
+Содержимое /etc/openssh/sshd_config должно быть следующим:
+Port 2243
+MaxAuthTries 200
+PasswordAuthentication yes
+PubkeyAuthentication yes
+Включаем в автозагрузку и перезагружаем
+systemctl enable – now sshd
+systemctl restart sshd
+
+ISP:
+Всё тоже самое, но меняем порт на 3344
+
+cli:	← Выполняем на пользователе, который будет подключаться (user)
+ssh-keygen -f ~/.ssh/ISP		← Здесь можно просто нажимать Enter
+ssh-keygen -f ~/.ssh/Server
+cd ~/.ssh
+chmod 600 ISP
+chmod 600 Server
+ssh-copy-id -i ~/.ssh/ISP.pub -p 3344 sshuser@10.0.128.1
+ssh-copy-id -i ~/.ssh/Server.pub -p 2243 sshuser@10.0.128.2
+Содержимое ~/.ssh/config должно быть следующим:
+Host ISP
+    HostName 10.0.128.1
+    Port 3344
+    User sshuser
+    IdentityFile ~/.ssh/ISP
+
+Host Server
+    HostName 10.0.128.2
+    Port 2243
+    User sshuser
+    IdentityFile ~/.ssh/Server
+Готово.
+
+
+Не менее ужасный iptables.
+ISP:
+iptables -F
+iptables -t nat -F
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
+iptables -P OUTPUT ACCEPT
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A FORWARD -p tcp --dport 80 -j ACCEPT
+iptables -A FORWARD -p tcp --dport 443 -j ACCEPT
+iptables -A FORWARD -p tcp --dport 53 -j ACCEPT
+iptables -A FORWARD -p udp --dport 53 -j ACCEPT
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+iptables-save > /etc/sysconfig/iptables
+
+
+
+
+
+
