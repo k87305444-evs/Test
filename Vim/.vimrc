@@ -1,4 +1,4 @@
-ОСНОВНЫЕ НАСТРОЙКИ 
+" ОСНОВНЫЕ НАСТРОЙКИ 
 syntax on
 filetype plugin indent on
 set number
@@ -13,14 +13,14 @@ set nobackup noswapfile
 set wildmenu
 set wildmode=list:longest
 
-АВТОЗАКРЫТИЕ СКОБОК 
+" АВТОЗАКРЫТИЕ СКОБОК 
 inoremap " ""<Left>
 inoremap ' ''<Left>
 inoremap ( ()<Left>
 inoremap [ []<Left>
 inoremap { {}<Left>
 
-ПЛАГИНЫ 
+" ПЛАГИНЫ 
 call plug#begin('~/.vim/plugged')
   Plug 'stephpy/vim-yaml'
   Plug 'dense-analysis/ale'
@@ -30,12 +30,12 @@ call plug#begin('~/.vim/plugged')
   Plug 'junegunn/fzf.vim'
 call plug#end()
 
-ГОРЯЧИЕ КЛАВИШИ 
+" ГОРЯЧИЕ КЛАВИШИ 
 nmap <F2> :NERDTreeToggle<CR>
 nmap <F3> :grep! 
 nmap <F4> :nohlsearch<CR>
 nmap <leader>f :Files<CR>
 nmap <leader>/ :Rg<CR>
 
-Подсветка YAML
+" Подсветка YAML
 au! BufRead,BufNewFile *.yml,*.yaml set filetype=yaml
